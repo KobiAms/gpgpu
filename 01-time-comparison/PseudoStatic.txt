@@ -1,0 +1,19 @@
+Master:
+
+    tasks = getTaskPool()
+    for each proccess:
+        batch = tasks.popBatch()
+        send(batch, proccess)
+    for each proccess:
+        recv(result, proccess)
+        manage(result)
+    
+Slave:
+
+    recv(batch, P_master)
+    for each task:
+        result = perform(task)
+        manage(result)
+    send(result, P_master)
+
+    

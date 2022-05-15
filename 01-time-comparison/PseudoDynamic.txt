@@ -1,0 +1,25 @@
+Master:
+
+    tasks = getTaskPool()
+    for each proccess:
+        task = tasks.pop()
+        send(task, proccess)
+    while tasks.notEmpty():
+        recv(result, P_any, status)
+        manage(result)
+        task = tasks.pop()
+        send(task, P_status)
+    for each proccess:
+        send("terminate", proccess)
+    
+Slave:
+    while true:
+        recv(result, P_master)
+        if(result == "terminate"){
+            break;
+        }
+        result = perform(task)
+        send(result, P_master)
+    
+
+
