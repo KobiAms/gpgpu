@@ -2,6 +2,9 @@
 #
 .DS_Store
 
+# VSCode settings
+.vscode
+
 # binaries
 
 *.gpgpu
@@ -10,4 +13,5 @@
 # MS
 
 *.doc
+*.docx
 
