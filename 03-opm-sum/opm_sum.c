@@ -5,7 +5,7 @@
 #include <string.h>
 #include "mpi.h"
 #define NUM_OF_THREADS 2
-#define FILE_NAME "data.txt"
+#define FILE_NAME "input.txt"
 
 // b = max(cos(exp(sin(a * k)))),  for k = 0, 1, 2, …, K
 double parallel_calculation_sum(double *A, int N, int K)
