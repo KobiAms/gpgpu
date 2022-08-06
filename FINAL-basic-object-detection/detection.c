@@ -69,6 +69,7 @@ int master(int np)
         MPI_Abort(MPI_COMM_WORLD, 0);
         return -1;
     }
+    printf("MASTER: read input - match value: %f, %d images, %d object.\n", M, N, K);
     // Send num of objects and match val to slaves
     MPI_Bcast(&M, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -90,6 +91,30 @@ int master(int np)
         printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
     }
 
+    int res;
+    for (int terminated = 1; terminated < np; current++)
+    {
+        // recive answer from slave
+        MPI_Recv(&res, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        printf("MASTER RECEIVED %d FROM SLAVE %d\n", res, status.MPI_SOURCE);
+        // if there any other tasks to do
+        if (current < N)
+        {
+            // send task to slave
+            MPI_Send(&images[current].id, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+            MPI_Send(&images[current].dim, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+            int img_size = images[current].dim * images[current].dim;
+            MPI_Send(images[current].data, img_size, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
+            printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
+        }
+        else
+        {
+            // send terminate tag to slave
+            MPI_Send(0, 0, MPI_BYTE, status.MPI_SOURCE, TERMINATE_TAG, MPI_COMM_WORLD);
+            terminated++;
+        }
+    }
+
     return 1;
 }
 
@@ -104,7 +129,7 @@ int slave(int rank)
     objs = (od_obj *)calloc(K, sizeof(od_obj));
     if (!objs)
     {
-        printf("[ERROR] - Memory allocation failed");
+        printf("[ERROR] - Memory allocation failed\n");
         MPI_Abort(MPI_COMM_WORLD, 0);
         return -1;
     }
@@ -129,13 +154,14 @@ int slave(int rank)
         img.data = (int *)calloc(img_size, sizeof(int));
         if (!img.data)
         {
-            printf("[ERROR] - Memory allocation failed");
+            printf("[ERROR] - Memory allocation failed\n");
             MPI_Abort(MPI_COMM_WORLD, 0);
             return -1;
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
-        break;
+        // printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
+        MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        free(img.data);
     }
 
     return 1;
