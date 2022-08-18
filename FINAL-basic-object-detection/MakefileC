@@ -1,0 +1,12 @@
+all: build run clean
+
+build:
+	mpicc -c main.c -o main.o
+	mpicc -c cFunctions.c -o cFunctions.o
+	mpicc -o mpiCudaOpemMP  main.o cFunctions.o 
+
+clean:
+	rm -f *.o ./mpiCudaOpemMP
+
+run:
+	mpiexec -np 2 ./mpiCudaOpemMP

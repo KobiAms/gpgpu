@@ -15,9 +15,11 @@ int computeOnGPU(int *data, int numElements) {
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
 
+
     size_t size = numElements * sizeof(float);
   
 
+    printf("computeOnGPU start\n");
     // Allocate memory on GPU to copy the data from the host
     int *d_A;
     err = cudaMalloc((void **)&d_A, size);
@@ -50,6 +52,7 @@ int computeOnGPU(int *data, int numElements) {
         fprintf(stderr, "Failed to copy result array from device to host -%s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
+    printf("computeOnGPU end\n");
 
     // Free allocated memory on GPU
     if (cudaFree(d_A) != cudaSuccess) {
