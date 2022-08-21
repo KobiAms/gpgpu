@@ -1,3 +1,5 @@
+all: build run clean
+
 build:
 	mpicxx -fopenmp -c main.c -o main.o
 	mpicxx -fopenmp -c cFunctions.c -o cFunctions.o

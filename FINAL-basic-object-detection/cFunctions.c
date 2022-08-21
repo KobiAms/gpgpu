@@ -1,6 +1,8 @@
 #include <mpi.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <omp.h>
 #include "myProto.h"
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects)
@@ -49,6 +51,7 @@ int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_ob
 
 int master(int np)
 {
+    double t1 = MPI_Wtime();
     int N, K;
     double M;
     od_obj *objs;
@@ -78,7 +81,10 @@ int master(int np)
         MPI_Send(&images[current].dim, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
         int img_size = images[current].dim * images[current].dim;
         MPI_Send(images[current].data, img_size, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
-        printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
+        printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
+        fflush(stdout);
+        sleep(0.2);
+
     }
 
     int res;
@@ -86,7 +92,10 @@ int master(int np)
     {
         // recive answer from slave
         MPI_Recv(&res, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("MASTER RECEIVED %d FROM SLAVE %d\n", res, status.MPI_SOURCE);
+        printf("MASTER RECEIVED [%d] RESULT FROM SLAVE %d\n", res, status.MPI_SOURCE);
+        fflush(stdout);
+        sleep(0.2);
+
         // if there any other tasks to do
         if (current < N)
         {
@@ -95,7 +104,10 @@ int master(int np)
             MPI_Send(&images[current].dim, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
             int img_size = images[current].dim * images[current].dim;
             MPI_Send(images[current].data, img_size, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
-            printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
+            printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
+            fflush(stdout);
+            sleep(0.2);
+
         }
         else
         {
@@ -104,6 +116,8 @@ int master(int np)
             terminated++;
         }
     }
+    double t2 = MPI_Wtime();
+    printf("Time: %f\n", t2 - t1);
 
     return 1;
 }
@@ -133,6 +147,7 @@ int slave(int rank)
         MPI_Bcast(objs[i].data, obj_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
     // Recive working tag & image from master
+    int proccesed = 0;
     while (1)
     {
         od_obj img;
@@ -149,8 +164,13 @@ int slave(int rank)
             return -1;
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        // detection(objs, K, img, M, SEQUENTIAL);
-        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
+        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[img_size-1]);
+        printf("---------   proccesed %d\n", proccesed);
+        // if(!proccesed)
+        detection(objs, K, img, M, SEQUENTIAL);
+        fflush(stdout);
+        proccesed++;
+        sleep(0.2);
         MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
     }
@@ -160,7 +180,7 @@ int slave(int rank)
 
 double calc_dif(int x, int y)
 {
-    return abs((x - y) / x);
+    return abs(((double) x -(double) y) / (double)x);
 }
 
 int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
@@ -168,10 +188,10 @@ int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
     switch (exec_type)
     {
     case SEQUENTIAL:
-        detectionSeqAll(objs, K, img, match_value);
+        detectionSeqAll(objs, K, img, match_value, 0);
         break;
     case PARALLEL_THREAD:
-
+        detectionSeqAll(objs, K, img, match_value, 1);
         break;
     case PARALLEL_CUDA:
 
@@ -180,11 +200,15 @@ int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
     return 1;
 }
 
-int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value)
+int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value, int activate_omp)
 {
     for (int i = 0; i < K; i++)
     {
+        printf("----DETECT OBJ %d\n", i);
+        fflush(stdout);
+        sleep(0.2);
         detectionSeq(&img, &objs[i], match_value);
+        // break;
     }
     return 1;
 }
@@ -200,32 +224,41 @@ od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
     }
 
     res->dim = img->dim - obj->dim + 1;
-    res->data = (double *)calloc(res->dim * res->dim, sizeof(double));
-
-    // float(*somethingAsMatrix)[2] = (float(*)[2])matrixReturnAsArray;
+    int res_size = res->dim * res->dim;
+    res->data = (double *)calloc(res_size, sizeof(double));
 
     int(*img_2d)[img->dim] = (int(*)[img->dim])img->data;
     int(*obj_2d)[obj->dim] = (int(*)[obj->dim])obj->data;
     double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
 
+    omp_set_dynamic(0);
+    #pragma omp parallel for
     for (int i = 0; i < res->dim; i++)
     {
         for (int j = 0; j < res->dim; j++)
         {
-
             for (int k = 0; k < obj->dim; k++)
             {
                 for (int l = 0; l < obj->dim; l++)
                 {
-                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][j]);
-                    printf("[%d - %d] ", img_2d[i + k][j + l], obj_2d[k][j]);
+                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][l]);
+                    // printf("[%d - %d] ", img_2d[i + k][j + l], obj_2d[k][l]);
                 }
-                printf("\n%lf \n", res_2d[i][j]);
-                break;
             }
-            break;
+            // printf("\n%lf \n", res_2d[i][j]);
         }
-        break;
+    }
+
+    omp_set_dynamic(0);
+    #pragma omp parallel for
+    for (int i = 0; i < res->dim; i++){
+        for (int j = 0; j < res->dim; j++){
+            if(res_2d[i][j] < match_value){
+                printf("Picture %d found Objetc %d in Position(%d, %d)\n", img->id, obj->id, i, j);
+                fflush(stdout);
+                sleep(0.2);
+            }
+        }
     }
 
     return NULL;
