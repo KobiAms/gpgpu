@@ -1,17 +1,7 @@
-#include <stdio.h>
+#include <mpi.h>
 #include <stdlib.h>
-#include "mpi.h"
-
-#define FILE_NAME "input.txt"
-#define WORK_TAG 0
-#define TERMINATE_TAG 1
-
-typedef struct od_obj
-{
-    int id;
-    int dim;
-    int *data;
-} od_obj;
+#include <stdio.h>
+#include "myProto.h"
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects)
 {
@@ -159,7 +149,8 @@ int slave(int rank)
             return -1;
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        // printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
+        // detection(objs, K, img, M, SEQUENTIAL);
+        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
         MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
     }
@@ -167,19 +158,75 @@ int slave(int rank)
     return 1;
 }
 
-int main(int argc, char *argv[])
+double calc_dif(int x, int y)
 {
-    // init MPI variables
-    int rank, np;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &np);
+    return abs((x - y) / x);
+}
 
-    if (rank == 0)
-        master(np);
-    else
-        slave(rank);
+int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
+{
+    switch (exec_type)
+    {
+    case SEQUENTIAL:
+        detectionSeqAll(objs, K, img, match_value);
+        break;
+    case PARALLEL_THREAD:
 
-    MPI_Finalize();
-    return 0;
+        break;
+    case PARALLEL_CUDA:
+
+        break;
+    }
+    return 1;
+}
+
+int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value)
+{
+    for (int i = 0; i < K; i++)
+    {
+        detectionSeq(&img, &objs[i], match_value);
+    }
+    return 1;
+}
+
+od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
+{
+    od_res *res = (od_res *)calloc(1, sizeof(od_res));
+    if (!res)
+    {
+        printf("[ERROR] - Memory allocation failed\n");
+        MPI_Abort(MPI_COMM_WORLD, 0);
+        return NULL;
+    }
+
+    res->dim = img->dim - obj->dim + 1;
+    res->data = (double *)calloc(res->dim * res->dim, sizeof(double));
+
+    // float(*somethingAsMatrix)[2] = (float(*)[2])matrixReturnAsArray;
+
+    int(*img_2d)[img->dim] = (int(*)[img->dim])img->data;
+    int(*obj_2d)[obj->dim] = (int(*)[obj->dim])obj->data;
+    double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
+
+    for (int i = 0; i < res->dim; i++)
+    {
+        for (int j = 0; j < res->dim; j++)
+        {
+
+            for (int k = 0; k < obj->dim; k++)
+            {
+                for (int l = 0; l < obj->dim; l++)
+                {
+                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][j]);
+                    printf("[%d - %d] ", img_2d[i + k][j + l], obj_2d[k][j]);
+                }
+                printf("\n%lf \n", res_2d[i][j]);
+                break;
+            }
+            break;
+        }
+        break;
+    }
+
+    return NULL;
 }
