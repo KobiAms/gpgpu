@@ -231,8 +231,8 @@ od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
     int(*obj_2d)[obj->dim] = (int(*)[obj->dim])obj->data;
     double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
 
-    omp_set_dynamic(0);
-    #pragma omp parallel for
+    // omp_set_dynamic(0);
+    // #pragma omp parallel for
     for (int i = 0; i < res->dim; i++)
     {
         for (int j = 0; j < res->dim; j++)
@@ -241,25 +241,33 @@ od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
             {
                 for (int l = 0; l < obj->dim; l++)
                 {
-                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][l]);
-                    // printf("[%d - %d] ", img_2d[i + k][j + l], obj_2d[k][l]);
+                    double dif = calc_dif(img_2d[i + k][j + l], obj_2d[k][l]);
+                    res_2d[i][j] += dif;
+                    printf("[%d %d - %lf] ", img_2d[i + k][j + l], obj_2d[k][l], dif);
                 }
             }
-            // printf("\n%lf \n", res_2d[i][j]);
+            printf(" ----- %lf\n", res_2d[i][j]);
+            // break;
         }
+        printf("\n");
+        // break;
     }
-
-    omp_set_dynamic(0);
-    #pragma omp parallel for
+    
+    // omp_set_dynamic(0);
+    printf("%lf \n", match_value);
+    // #pragma omp parallel for
     for (int i = 0; i < res->dim; i++){
         for (int j = 0; j < res->dim; j++){
+            printf("%lf ", res_2d[i][j]);
             if(res_2d[i][j] < match_value){
-                printf("Picture %d found Objetc %d in Position(%d, %d)\n", img->id, obj->id, i, j);
+                // printf("Picture %d found Objetc %d in Position(%d, %d)\n", img->id, obj->id, i, j);
                 fflush(stdout);
                 sleep(0.2);
             }
         }
+
     }
+    printf("\n");
 
     return NULL;
 }
