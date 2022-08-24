@@ -165,9 +165,9 @@ int slave(int rank)
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[img_size-1]);
-        printf("---------   proccesed %d\n", proccesed);
         // if(!proccesed)
-        detection(objs, K, img, M, SEQUENTIAL);
+        detection(objs, K, img, M, SEQUENTIAL);        
+        printf("---------   proccesed %d\n", proccesed);
         fflush(stdout);
         proccesed++;
         sleep(0.2);
@@ -183,8 +183,9 @@ double calc_dif(int x, int y)
     return abs(((double) x -(double) y) / (double)x);
 }
 
-int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
+int detection(od_obj *objs, int K, od_obj img, double match_value, int exec_type)
 {
+
     switch (exec_type)
     {
     case SEQUENTIAL:
@@ -200,11 +201,11 @@ int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
     return 1;
 }
 
-int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value, int activate_omp)
+int detectionSeqAll(od_obj *objs, int K, od_obj img, double match_value, int activate_omp)
 {
     for (int i = 0; i < K; i++)
     {
-        printf("----DETECT OBJ %d\n", i);
+        printf("----DETECT OBJ %d %lf\n", i, match_value);
         fflush(stdout);
         sleep(0.2);
         detectionSeq(&img, &objs[i], match_value);
@@ -213,7 +214,7 @@ int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value, int activa
     return 1;
 }
 
-od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
+od_res *detectionSeq(od_obj *img, od_obj *obj, double match_value)
 {
     od_res *res = (od_res *)calloc(1, sizeof(od_res));
     if (!res)
@@ -243,24 +244,24 @@ od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
                 {
                     double dif = calc_dif(img_2d[i + k][j + l], obj_2d[k][l]);
                     res_2d[i][j] += dif;
-                    printf("[%d %d - %lf] ", img_2d[i + k][j + l], obj_2d[k][l], dif);
+                    // printf("[%d %d - %lf] ", img_2d[i + k][j + l], obj_2d[k][l], dif);
                 }
             }
-            printf(" ----- %lf\n", res_2d[i][j]);
+            // printf(" ----- %lf\n", res_2d[i][j]);
             // break;
         }
-        printf("\n");
+        // printf("\n");
         // break;
     }
     
-    // omp_set_dynamic(0);
-    printf("%lf \n", match_value);
-    // #pragma omp parallel for
+    omp_set_dynamic(0);
+    // printf("%lf \n", match_value);
+    #pragma omp parallel for
     for (int i = 0; i < res->dim; i++){
         for (int j = 0; j < res->dim; j++){
-            printf("%lf ", res_2d[i][j]);
+            // printf("%lf ", res_2d[i][j]);
             if(res_2d[i][j] < match_value){
-                // printf("Picture %d found Objetc %d in Position(%d, %d)\n", img->id, obj->id, i, j);
+                printf("Picture %d found Objetc %d in Position(%d, %d)\n", img->id, obj->id, i, j);
                 fflush(stdout);
                 sleep(0.2);
             }
