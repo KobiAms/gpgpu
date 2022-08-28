@@ -31,7 +31,7 @@ int readObjects(FILE *fp, od_obj **objects, int num_objects);
 int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_obj **objs, int *K);
 int detection(od_obj *objs, int K, od_obj img, double match_value, int exec_type);
 int detectionSeqAll(od_obj *objs, int K, od_obj img, double match_value, int activate_omp);
-od_res* detectionSeq(od_obj *img, od_obj *obj, double match_value);
+od_res* calculateDiffMatrix(od_obj *img, od_obj *obj, double match_value);
 double calc_dif(int x, int y);
 int master(int np);
 int slave(int rank);
