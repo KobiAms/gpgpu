@@ -81,7 +81,7 @@ int master(int np)
         MPI_Send(&images[current].dim, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
         int img_size = images[current].dim * images[current].dim;
         MPI_Send(images[current].data, img_size, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
-        printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
+        // printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
         fflush(stdout);
         sleep(0.2);
 
@@ -92,7 +92,7 @@ int master(int np)
     {
         // recive answer from slave
         MPI_Recv(&res, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("MASTER RECEIVED [%d] RESULT FROM SLAVE %d\n", res, status.MPI_SOURCE);
+        // printf("MASTER RECEIVED [%d] RESULT FROM SLAVE %d\n", res, status.MPI_SOURCE);
         fflush(stdout);
         sleep(0.2);
 
@@ -104,7 +104,7 @@ int master(int np)
             MPI_Send(&images[current].dim, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
             int img_size = images[current].dim * images[current].dim;
             MPI_Send(images[current].data, img_size, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
-            printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
+            // printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[img_size-1]);
             fflush(stdout);
             sleep(0.2);
 
@@ -147,7 +147,6 @@ int slave(int rank)
         MPI_Bcast(objs[i].data, obj_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
     // Recive working tag & image from master
-    int proccesed = 0;
     while (1)
     {
         od_obj img;
@@ -164,12 +163,9 @@ int slave(int rank)
             return -1;
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[img_size-1]);
-        // if(!proccesed)
-        detection(objs, K, img, M, SEQUENTIAL);        
-        printf("---------   proccesed %d\n", proccesed);
+        // printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[img_size-1]);
+        detection(objs, K, img, M, CUDA_OFF, OPEN_MP_ON);        
         fflush(stdout);
-        proccesed++;
         sleep(0.2);
         MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
@@ -183,54 +179,46 @@ double calc_dif(int x, int y)
     return abs(((double) x -(double) y) / (double)x);
 }
 
-int detection(od_obj *objs, int K, od_obj img, double match_value, int exec_type)
+int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode)
 {
-
-    switch (exec_type)
-    {
-    case SEQUENTIAL:
-        detectionSeqAll(objs, K, img, match_value, 0);
-        break;
-    case PARALLEL_THREAD:
-        detectionSeqAll(objs, K, img, match_value, 1);
-        break;
-    case PARALLEL_CUDA:
-
-        break;
-    }
-    return 1;
-}
-
-int detectionSeqAll(od_obj *objs, int K, od_obj img, double match_value, int activate_omp)
-{
-    for (int i = 0; i < K; i++)
-    {
-        fflush(stdout);
-        sleep(0.2);
-        od_res *res = calculateDiffMatrix(&img, &objs[i], match_value);
-        double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
-        omp_set_dynamic(0);
-        #pragma omp parallel for
-        for (int k = 0; k < res->dim; k++){
-            for (int j = 0; j < res->dim; j++){
-                if(res_2d[k][j] < match_value){
-                    printf("Picture %d found Objetc %d in Position(%d, %d)\n", res->img_id, res->obj_id, k, j);
-                    fflush(stdout);
-                    sleep(0.2);
-                }
-            }
-
+    int find = 0;
+    od_res_matrix* res_matrix;
+    for(int k = 0; k < K; k++){
+        
+        if(cuda_mode == CUDA_ON){
+            res_matrix = calculateDiffCUDA(&img, &objs[k]);
+        } else {
+            res_matrix = calculateDiffCPU(&img, &objs[k], omp_mode);
         }
+        find = searchValue(res_matrix, match_value, omp_mode);
+        free(res_matrix);
 
     }
-    return 1;
+    
+    return find;
 }
 
+int searchValue(od_res_matrix *res, double match_value, int omp_mode){
 
+    int find = 0;
+    double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
+    for (int k = 0; k < res->dim; k++){
+        for (int j = 0; j < res->dim; j++){
+            
+            if(res_2d[k][j] < match_value){
+                printf("Picture %d found Objetc %d in Position(%d, %d)\n", res->img_id, res->obj_id, k, j);
+                fflush(stdout);
+                sleep(0.2);
+                find = 1;
+            }
+        }
+    }
+    return find;
+}
 
-od_res *calculateDiffMatrix(od_obj *img, od_obj *obj, double match_value)
+od_res_matrix *calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode)
 {
-    od_res *res = (od_res *)calloc(1, sizeof(od_res));
+    od_res_matrix *res = (od_res_matrix *)calloc(1, sizeof(od_res_matrix));
     if (!res)
     {
         printf("[ERROR] - Memory allocation failed\n");
