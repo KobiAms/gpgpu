@@ -25,19 +25,19 @@ typedef struct od_res_matrix
     double *data;
 } od_res_matrix;
 
-
-
-
-void test(int *data, int n);
-od_res_matrix* computeOnGPU(od_obj *img, od_obj *obj);
+int master(int np);
+int slave(int rank);
 
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects);
 int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_obj **objs, int *K);
+
 int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode);
+
 od_res_matrix* calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode);
-od_res_matrix* calculateDiffCUDA(od_obj *img, od_obj *obj);
 int searchValue(od_res_matrix *res, double match_value, int omp_mode);
 double calc_dif(int x, int y);
-int master(int np);
-int slave(int rank);
+
+od_res_matrix* calculateDiffCUDA(od_obj *img, od_obj *obj);
+
+

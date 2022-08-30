@@ -164,7 +164,7 @@ int slave(int rank)
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         // printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[img_size-1]);
-        detection(objs, K, img, M, CUDA_OFF, OPEN_MP_ON);        
+        detection(objs, K, img, M, CUDA_ON, OPEN_MP_ON);        
         fflush(stdout);
         sleep(0.2);
         MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
@@ -190,9 +190,15 @@ int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode
         } else {
             res_matrix = calculateDiffCPU(&img, &objs[k], omp_mode);
         }
-        find = searchValue(res_matrix, match_value, omp_mode);
-        free(res_matrix);
-
+        if(res_matrix){
+            find = searchValue(res_matrix, match_value, omp_mode);
+            free(res_matrix);
+        } else {
+            printf("Result matrix not received for img: %d, obj: %d\n", objs[k].id, img.dim);
+            fflush(stdout);
+            sleep(0.2);
+        }
+        
     }
     
     return find;
@@ -202,6 +208,8 @@ int searchValue(od_res_matrix *res, double match_value, int omp_mode){
 
     int find = 0;
     double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
+    omp_set_dynamic(0);
+    #pragma omp parallel for
     for (int k = 0; k < res->dim; k++){
         for (int j = 0; j < res->dim; j++){
             
