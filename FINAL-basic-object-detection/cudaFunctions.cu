@@ -78,7 +78,7 @@ od_res_matrix* calculateDiffCUDA(od_obj *img, od_obj *obj) {
 	dim3 gridDim(blocksPerGrid, blocksPerGrid);
 	dim3 blockDim(threadsPerBlock, threadsPerBlock);
 
-    // diffKernel<<<blocksPerGrid, threadsPerBlock>>>()
+    diffKernel<<<blocksPerGrid, threadsPerBlock>>>(img_2d, img->dim, obj_2d, obj->dim, res_2d, res->dim);
 
 
 
