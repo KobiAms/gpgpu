@@ -5,19 +5,38 @@
 
 __global__ void diffKernel(int* img, int img_dim, int* obj, int obj_dim, double *res, int res_dim)
 {
-    int y = blockIdx.x * blockDim.x + threadIdx.x;
-	int x = blockIdx.y * blockDim.y + threadIdx.y;
+    // int y = blockIdx.x * blockDim.x + threadIdx.x;
+	// int x = blockIdx.y * blockDim.y + threadIdx.y;
 	
 
-	if (x < res_dim && y < res_dim) {
-		for (int i = 0; i < obj_dim; i++) {
-			for (int j = 0; j < obj_dim; j++) {
-                res[x*res_dim + y] +=  1;
-                // abs(((double) img[(x+i)*img_dim + y + j] -(double) obj[i*obj_dim+j]) / (double) img[(x+i)*img_dim + y + j]);
+	// if (x < res_dim && y < res_dim) {
+	// 	for (int i = 0; i < obj_dim; i++) {
+	// 		for (int j = 0; j < obj_dim; j++) {
+    //             res[x*res_dim + y] +=  1;
+    //             // abs(((double) img[(x+i)*img_dim + y + j] -(double) obj[i*obj_dim+j]) / (double) img[(x+i)*img_dim + y + j]);
+	// 		}
+	// 	}
+	// }
+// gpuMatrixConv(float* gpuMat1, float* gpuMat2, float* gpuMat3, int m1Rows, int m1Cols, int mRowsCols, int m3Rows, int m3Cols)
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	// float sum = 0.0;
+
+    double x, y;
+
+	if (row < res_dim && col < res_dim) {
+		for (int i = 0; i < res_dim; i++) {
+			for (int j = 0; j < res_dim; j++) {
+                x = img[(row + i) * img_dim + col + j];
+                y = obj[i * obj_dim + j];
+				res[row * res_dim + col] += abs((x-y)/x);
 			}
 		}
+		// gpuMat3[row * m3Cols + col] = sum;
 	}
 }
+
+
 
 
 
