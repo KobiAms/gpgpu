@@ -191,7 +191,9 @@ int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode
             res_matrix = calculateDiffCPU(&img, &objs[k], omp_mode);
         }
         if(res_matrix){
-            find = searchValue(res_matrix, match_value, omp_mode);
+            // find = searchValue(res_matrix, match_value, omp_mode);
+            printf("IMG: %d, OBJ: %d - [%lf %lf]\n", img.id, objs[k].id, res_matrix->data[0], res_matrix->data[res_matrix->dim*res_matrix->dim-1]);
+            free(res_matrix->data);
             free(res_matrix);
         } else {
             printf("Result matrix not received for img: %d, obj: %d\n", objs[k].id, img.dim);
