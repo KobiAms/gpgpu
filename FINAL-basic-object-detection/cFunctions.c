@@ -1,6 +1,8 @@
 #include <mpi.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <omp.h>
 #include "myProto.h"
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects)
@@ -49,17 +51,17 @@ int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_ob
 
 int master(int np)
 {
+    double t1 = MPI_Wtime();
     int N, K;
     double M;
     od_obj *objs;
     od_obj *images;
     MPI_Status status;
-    if (readFromFile(FILE_NAME, &M, &images, &N, &objs, &K) < 0)
+    if (readFromFile(DATA_FILE_NAME, &M, &images, &N, &objs, &K) < 0)
     {
         MPI_Abort(MPI_COMM_WORLD, 0);
         return -1;
     }
-    printf("MASTER: read input - match value: %f, %d images, %d object.\n", M, N, K);
     // Send num of objects and match val to slaves
     MPI_Bcast(&M, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -71,22 +73,41 @@ int master(int np)
         int obj_size = objs[i].dim * objs[i].dim;
         MPI_Bcast(objs[i].data, obj_size, MPI_INT, 0, MPI_COMM_WORLD);
     }
-    int current = 0;
-    for (int p = 1; p < np && current < N; p++, current++)
+    int current = 0, terminated = 1;
+    for (int p = 1; p < np; p++)
     {
-        MPI_Send(&images[current].id, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
-        MPI_Send(&images[current].dim, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
-        int img_size = images[current].dim * images[current].dim;
-        MPI_Send(images[current].data, img_size, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
-        printf("MASTER SEND TO %d: %d %d - %d %d\n", p, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
+        if(current < N){
+            MPI_Send(&images[current].id, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
+            MPI_Send(&images[current].dim, 1, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
+            int img_size = images[current].dim * images[current].dim;
+            MPI_Send(images[current].data, img_size, MPI_INT, p, WORK_TAG, MPI_COMM_WORLD);
+            fflush(stdout);
+            sleep(0.2);
+            current++;
+        } else {
+            // send terminate tag to slave
+            MPI_Send(0, 0, MPI_BYTE, p, TERMINATE_TAG, MPI_COMM_WORLD);
+            terminated++;
+        }
+    }
+    FILE *out_file = fopen(OUTPUT_FILE_NAME, "w+");
+    if(!out_file){
+        printf("FAILED to open file for output\n");
+        MPI_Abort(MPI_COMM_WORLD, 0);
     }
 
     int res;
-    for (int terminated = 1; terminated < np; current++)
+    for (; terminated < np; current++)
     {
+        int detection_info[5] = {0};
         // recive answer from slave
-        MPI_Recv(&res, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        printf("MASTER RECEIVED %d FROM SLAVE %d\n", res, status.MPI_SOURCE);
+        MPI_Recv(detection_info, 5, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        if(detection_info[0]){
+            fprintf(out_file, "Picture %d found Objetc %d in Position(%d, %d)\n", detection_info[1], detection_info[2], detection_info[3], detection_info[4]);
+        } else {
+            fprintf(out_file, "Picture %d No Objects were found\n", detection_info[1]);
+        }
+
         // if there any other tasks to do
         if (current < N)
         {
@@ -95,7 +116,7 @@ int master(int np)
             MPI_Send(&images[current].dim, 1, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
             int img_size = images[current].dim * images[current].dim;
             MPI_Send(images[current].data, img_size, MPI_INT, status.MPI_SOURCE, WORK_TAG, MPI_COMM_WORLD);
-            printf("MASTER SEND TO %d: %d %d - %d %d\n", status.MPI_SOURCE, images[current].id, images[current].dim, images[current].data[0], images[current].data[1]);
+
         }
         else
         {
@@ -104,6 +125,16 @@ int master(int np)
             terminated++;
         }
     }
+    fclose(out_file);
+    for (int i = 0; i < K; i++)
+        free(objs[i].data);
+    for (int i = 0; i < N; i++)
+        free(images[i].data);
+    free(objs);
+    free(images);
+
+    double t2 = MPI_Wtime();
+    printf("Time: %f\n", t2 - t1);
 
     return 1;
 }
@@ -149,84 +180,102 @@ int slave(int rank)
             return -1;
         }
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-        // detection(objs, K, img, M, SEQUENTIAL);
-        printf("SLAVE %d RECIVED: %d %d - %d %d\n", rank, img.id, img.dim, img.data[0], img.data[1]);
-        MPI_Send(&img.dim, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        int detection_info[5] = {0};
+        detection_info[1] = img.id;
+        detection(objs, K, img, M, CUDA_ON, OPEN_MP_ON, detection_info);       
+        MPI_Send(detection_info, 5, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
     }
+    for (int i = 0; i < K; i++)
+        free(objs[i].data);
+    free(objs);
 
     return 1;
 }
 
 double calc_dif(int x, int y)
 {
-    return abs((x - y) / x);
+    return abs(((double) x -(double) y) / (double)x);
 }
 
-int detection(od_obj *objs, int K, od_obj img, int match_value, int exec_type)
+int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode, int detection_info[])
 {
-    switch (exec_type)
-    {
-    case SEQUENTIAL:
-        detectionSeqAll(objs, K, img, match_value);
-        break;
-    case PARALLEL_THREAD:
-
-        break;
-    case PARALLEL_CUDA:
-
-        break;
+    
+    int find = 0;
+    od_res_matrix* res_matrix;
+    for(int k = 0; k < K; k++){
+        
+        if(cuda_mode == CUDA_ON){
+            res_matrix = calculateDiffCUDA(&img, &objs[k]);
+        } else {
+            res_matrix = calculateDiffCPU(&img, &objs[k], omp_mode);
+        }
+        if(res_matrix){
+            find = searchValue(res_matrix, match_value, omp_mode, detection_info);
+            free(res_matrix->data);
+            free(res_matrix);
+            if(find){
+                break;
+            }
+            
+        }
     }
-    return 1;
+    return find;
 }
 
-int detectionSeqAll(od_obj *objs, int K, od_obj img, int match_value)
-{
-    for (int i = 0; i < K; i++)
-    {
-        detectionSeq(&img, &objs[i], match_value);
+int searchValue(od_res_matrix *res, double match_value, int omp_mode, int detection_info[]){
+
+    int find = 0;
+    double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
+    omp_set_dynamic(0);
+    #pragma omp parallel for
+    for (int k = 0; k < res->dim; k++){
+        for (int j = 0; j < res->dim; j++){
+            if(res_2d[k][j] < match_value){
+                detection_info[0] = 1;
+                detection_info[2] = res->obj_id;
+                detection_info[3] = k;
+                detection_info[4] = j;
+                find = 1;
+            }
+        }
     }
-    return 1;
+    return find;
 }
 
-od_res *detectionSeq(od_obj *img, od_obj *obj, int match_value)
+od_res_matrix *calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode)
 {
-    od_res *res = (od_res *)calloc(1, sizeof(od_res));
+    od_res_matrix *res = (od_res_matrix *)calloc(1, sizeof(od_res_matrix));
     if (!res)
     {
         printf("[ERROR] - Memory allocation failed\n");
         MPI_Abort(MPI_COMM_WORLD, 0);
         return NULL;
     }
-
+    res->obj_id = obj->id;
+    res->img_id = img->id;
     res->dim = img->dim - obj->dim + 1;
-    res->data = (double *)calloc(res->dim * res->dim, sizeof(double));
 
-    // float(*somethingAsMatrix)[2] = (float(*)[2])matrixReturnAsArray;
+    int res_size = res->dim * res->dim;
+    res->data = (double *)calloc(res_size, sizeof(double));
+    if (!res->data)
+    {
+        printf("[ERROR] - Memory allocation failed\n");
+        MPI_Abort(MPI_COMM_WORLD, 0);
+        return NULL;
+    }
 
     int(*img_2d)[img->dim] = (int(*)[img->dim])img->data;
     int(*obj_2d)[obj->dim] = (int(*)[obj->dim])obj->data;
     double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
 
+    omp_set_dynamic(0);
+    #pragma omp parallel for
     for (int i = 0; i < res->dim; i++)
-    {
         for (int j = 0; j < res->dim; j++)
-        {
-
             for (int k = 0; k < obj->dim; k++)
-            {
                 for (int l = 0; l < obj->dim; l++)
-                {
-                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][j]);
-                    printf("[%d - %d] ", img_2d[i + k][j + l], obj_2d[k][j]);
-                }
-                printf("\n%lf \n", res_2d[i][j]);
-                break;
-            }
-            break;
-        }
-        break;
-    }
+                    res_2d[i][j] += calc_dif(img_2d[i + k][j + l], obj_2d[k][l]);
 
-    return NULL;
+    return res;
 }
