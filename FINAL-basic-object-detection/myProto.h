@@ -1,7 +1,8 @@
 #pragma once
 #include <stdio.h>
 
-#define FILE_NAME "input.txt"
+#define DATA_FILE_NAME "input.txt"
+#define OUTPUT_FILE_NAME "output.txt"
 #define WORK_TAG 0
 #define TERMINATE_TAG 1
 #define CUDA_ON 2
@@ -32,10 +33,10 @@ int slave(int rank);
 int readObjects(FILE *fp, od_obj **objects, int num_objects);
 int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_obj **objs, int *K);
 
-int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode);
+int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode, int detection_info[]);
 
 od_res_matrix* calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode);
-int searchValue(od_res_matrix *res, double match_value, int omp_mode);
+int searchValue(od_res_matrix *res, double match_value, int omp_mode, int detection_info[]);
 double calc_dif(int x, int y);
 
 od_res_matrix* calculateDiffCUDA(od_obj *img, od_obj *obj);
