@@ -146,7 +146,7 @@ int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
         cuda_mode_str[2] = 'F';
         cuda_mode_str[3] = '\0';
     } 
-    printf("Runtime: %f, \tOpenMP Node: [%s], \tCuda Mode: [%s]\n", t2 - t1, omp_mode_str, cuda_mode_str);
+    printf("OpenMP Node: [%s], \tCuda Mode: [%s], \tRuntime: %f\n", omp_mode_str, cuda_mode_str, t2 - t1);
 
     return 1;
 }
