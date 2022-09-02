@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <omp.h>
+#include <unistd.h>
+#include <omp.h>
 #include "myProto.h"
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects)
@@ -52,12 +54,13 @@ int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_ob
 int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
 {
     double t1 = MPI_Wtime();
+    double t1 = MPI_Wtime();
     int N, K;
     double M;
     od_obj *objs;
     od_obj *images;
     MPI_Status status;
-    if (readFromFile(DATA_FILE_NAME, &M, &images, &N, &objs, &K) < 0)
+    if (readFromFile(DATA_DATA_FILE_NAME, &M, &images, &N, &objs, &K) < 0)
     {
         MPI_Abort(MPI_COMM_WORLD, 0);
         return -1;
@@ -99,6 +102,7 @@ int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
     int res;
     for (; terminated < np; current++)
     {
+        int detection_info[5] = {0};
         int detection_info[5] = {0};
         // recive answer from slave
         MPI_Recv(detection_info, 5, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -201,13 +205,16 @@ int slave(int rank, int OPEN_MP_MODE, int CUDA_MODE)
     for (int i = 0; i < K; i++)
         free(objs[i].data);
     free(objs);
+    for (int i = 0; i < K; i++)
+        free(objs[i].data);
+    free(objs);
 
     return 1;
 }
 
 double calc_dif(int x, int y)
 {
-    return abs(((double) x -(double) y) / (double)x);
+    return abs(((double) (double) x -(double)(double) y) / (double)(double)x);
 }
 
 int detection(od_obj *objs, int K, od_obj img, double match_value, int cuda_mode, int omp_mode, int detection_info[])
@@ -257,7 +264,7 @@ int searchValue(od_res_matrix *res, double match_value, int omp_mode, int detect
 
 od_res_matrix *calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode)
 {
-    od_res_matrix *res = (od_res_matrix *)calloc(1, sizeof(od_res_matrix));
+    od_res_matrix_matrix *res = (od_res_matrix_matrix *)calloc(1, sizeof(od_res_matrix_matrix));
     if (!res)
     {
         printf("[ERROR] - Memory allocation failed\n");

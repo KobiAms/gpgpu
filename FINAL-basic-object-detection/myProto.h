@@ -1,7 +1,8 @@
 #pragma once
 #include <stdio.h>
 
-#define DATA_FILE_NAME "input.txt"
+#define DATA_DATA_FILE_NAME "input.txt"
+#define OUTPUT_FILE_NAME "output.txt"
 #define OUTPUT_FILE_NAME "output.txt"
 #define WORK_TAG 0
 #define TERMINATE_TAG 1
@@ -18,7 +19,7 @@ typedef struct od_obj
     int *data;
 } od_obj;
 
-typedef struct od_res_matrix
+typedef struct od_res_matrix_matrix
 {
     int obj_id;
     int img_id;

@@ -27,11 +27,3 @@ runOmp:
 
 runSeq:
 	mpiexec -np 4 ./mpiCudaOpemMP 3 5
-
-
-
-
-#define CUDA_ON 2
-#define CUDA_OFF 3
-#define OPEN_MP_ON 4
-#define OPEN_MP_OFF 5
