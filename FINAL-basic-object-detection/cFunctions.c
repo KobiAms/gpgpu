@@ -54,7 +54,6 @@ int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_ob
 int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
 {
     double t1 = MPI_Wtime();
-    double t1 = MPI_Wtime();
     int N, K;
     double M;
     od_obj *objs;
@@ -102,7 +101,6 @@ int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
     int res;
     for (; terminated < np; current++)
     {
-        int detection_info[5] = {0};
         int detection_info[5] = {0};
         // recive answer from slave
         MPI_Recv(detection_info, 5, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -202,9 +200,6 @@ int slave(int rank, int OPEN_MP_MODE, int CUDA_MODE)
         MPI_Send(detection_info, 5, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
     }
-    for (int i = 0; i < K; i++)
-        free(objs[i].data);
-    free(objs);
     for (int i = 0; i < K; i++)
         free(objs[i].data);
     free(objs);
