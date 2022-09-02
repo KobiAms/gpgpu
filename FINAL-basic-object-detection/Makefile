@@ -1,5 +1,5 @@
 all: build run clean
-runAllModes: runSeq runOmp runCuda runOmpCuda
+runAllModes: build runSeq runOmp runCuda runOmpCuda clean
 
 build:
 	mpicxx -fopenmp -c main.c -o main.o
