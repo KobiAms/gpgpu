@@ -1,4 +1,5 @@
 all: build run clean
+runAllModes: runSeq runOmp runCuda runOmpCuda
 
 build:
 	mpicxx -fopenmp -c main.c -o main.o
@@ -14,3 +15,23 @@ run:
 
 runOn2:
 	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpemMP
+
+runOmpCuda:
+	mpiexec -np 4 ./mpiCudaOpemMP 2 4
+
+runCuda:
+	mpiexec -np 4 ./mpiCudaOpemMP 2 5
+
+runOmp:
+	mpiexec -np 4 ./mpiCudaOpemMP 3 4
+
+runSeq:
+	mpiexec -np 4 ./mpiCudaOpemMP 3 5
+
+
+
+
+#define CUDA_ON 2
+#define CUDA_OFF 3
+#define OPEN_MP_ON 4
+#define OPEN_MP_OFF 5

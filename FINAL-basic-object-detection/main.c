@@ -20,11 +20,20 @@ int main(int argc, char *argv[])
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &np);
+    int OMP_MODE = OPEN_MP_ON;
+    int CUDA_MODE = CUDA_ON;
+
+
+    
+    if(argc == 3){
+        CUDA_MODE = atoi(argv[1]);
+        OMP_MODE = atoi(argv[2]);
+    }    
 
     if (rank == 0)
-        master(np);
+        master(np, OMP_MODE, CUDA_MODE);
     else
-        slave(rank);
+        slave(rank, OMP_MODE, CUDA_MODE);
 
     MPI_Finalize();
     return 0;

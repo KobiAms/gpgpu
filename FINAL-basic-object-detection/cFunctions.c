@@ -49,7 +49,7 @@ int readFromFile(const char *fileName, double *M, od_obj **images, int *N, od_ob
     return 1;
 }
 
-int master(int np)
+int master(int np, int OPEN_MP_MODE, int CUDA_MODE)
 {
     double t1 = MPI_Wtime();
     int N, K;
@@ -134,12 +134,24 @@ int master(int np)
     free(images);
 
     double t2 = MPI_Wtime();
-    printf("Time: %f\n", t2 - t1);
+    char omp_mode_str[5] = "ON";
+    char cuda_mode_str[5] = "ON";
+    if(OPEN_MP_MODE == OPEN_MP_OFF){
+        omp_mode_str[1] = 'F';
+        omp_mode_str[2] = 'F';
+        omp_mode_str[3] = '\0';
+    } 
+    if(CUDA_MODE == CUDA_OFF){
+        cuda_mode_str[1] = 'F';
+        cuda_mode_str[2] = 'F';
+        cuda_mode_str[3] = '\0';
+    } 
+    printf("Runtime: %f, \tOpenMP Node: [%s], \tCuda Mode: [%s]\n", t2 - t1, omp_mode_str, cuda_mode_str);
 
     return 1;
 }
 
-int slave(int rank)
+int slave(int rank, int OPEN_MP_MODE, int CUDA_MODE)
 {
     int K;
     double M;
@@ -182,7 +194,7 @@ int slave(int rank)
         MPI_Recv(img.data, img_size, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
         int detection_info[5] = {0};
         detection_info[1] = img.id;
-        detection(objs, K, img, M, CUDA_ON, OPEN_MP_ON, detection_info);       
+        detection(objs, K, img, M, CUDA_MODE, OPEN_MP_MODE, detection_info);       
         MPI_Send(detection_info, 5, MPI_INT, 0, 0, MPI_COMM_WORLD);
         free(img.data);
     }
@@ -268,8 +280,11 @@ od_res_matrix *calculateDiffCPU(od_obj *img, od_obj *obj, int omp_mode)
     int(*img_2d)[img->dim] = (int(*)[img->dim])img->data;
     int(*obj_2d)[obj->dim] = (int(*)[obj->dim])obj->data;
     double(*res_2d)[res->dim] = (double(*)[res->dim])res->data;
-
-    omp_set_dynamic(0);
+    if(omp_mode == OPEN_MP_OFF){
+        omp_set_num_threads(1);
+    } else {
+        omp_set_dynamic(0);
+    }
     #pragma omp parallel for
     for (int i = 0; i < res->dim; i++)
         for (int j = 0; j < res->dim; j++)

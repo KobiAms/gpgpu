@@ -26,8 +26,8 @@ typedef struct od_res_matrix
     double *data;
 } od_res_matrix;
 
-int master(int np);
-int slave(int rank);
+int master(int np, int OPEN_MP_MODE, int CUDA_MODE);
+int slave(int rank, int OPEN_MP_MODE, int CUDA_MODE);
 
 
 int readObjects(FILE *fp, od_obj **objects, int num_objects);
